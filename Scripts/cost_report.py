@@ -35,6 +35,8 @@ response = requests.post(url, json=body, headers=headers)
 data = response.json()
 
 print("=== Azure Daily Cost Report ===")
-for row in data.get("properties", {}).get("rows", []):
-    service_name, cost = row
+for row in data["properties"]["rows"]:
+    print(row)  # Add this to see what's inside
+    service_name = row[0]
+    cost = row[1]
     print(f"{service_name}: ₹{cost:.2f}")
