@@ -1,6 +1,7 @@
 import os
 import requests
 from azure.identity import DefaultAzureCredential
+from datetime import datetime
 
 cred = DefaultAzureCredential()
 token = cred.get_token("https://management.azure.com/.default").token
@@ -36,9 +37,12 @@ data = response.json()
 
 print("=== Azure Daily Cost Report ===")
 for row in data["properties"]["rows"]:
-    if len(row) >= 2:
-        service_name = row[2]
-        cost = row[1]
-        print(f"{service_name}: ₹{cost:.2f}")
-    else:
-        print("Skipping invalid row:", row)
+    cost = row[0]
+    raw_date = str(row[1])
+    service_name = row[2]
+    currency = row[3]
+
+    # Format the date from YYYYMMDD to DD-MM-YYYY
+    formatted_date = datetime.strptime(raw_date, "%Y%m%d").strftime("%d-%m-%Y")
+
+    print(f"{formatted_date} - {service_name}: {currency} ₹{cost:.2f}")
