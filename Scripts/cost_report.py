@@ -45,4 +45,4 @@ for row in data["properties"]["rows"]:
     # Format the date from YYYYMMDD to DD-MM-YYYY
     formatted_date = datetime.strptime(raw_date, "%Y%m%d").strftime("%d-%m-%Y")
 
-    print(f"{formatted_date} - {service_name}: {currency} ₹{cost:.2f}")
+    print(f"{formatted_date} - {service_name}: {currency} {cost:.2f}")
