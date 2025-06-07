@@ -1,0 +1,35 @@
+name: Deploy Flask App to Azure VM
+
+on:
+  push:
+    branches:
+      - main  # Or the branch you're working on
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H 74.235.7.102 >> ~/.ssh/known_hosts
+
+    - name: Copy Flask app to Azure VM
+      run: |
+        scp -r ./ azureuser@74.235.7.102:/home/azureuser/flaskapp
+
+    - name: Start Flask app on Azure VM
+      run: |
+        ssh azureuser@74.235.7.102 << 'EOF'
+          sudo apt update
+          sudo apt install -y python3-pip
+          pip3 install flask
+          pkill -f app.py || true
+          nohup python3 /home/azureuser/flaskapp/app.py > flask.log 2>&1 &
+        EOF
