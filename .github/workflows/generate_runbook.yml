@@ -15,8 +15,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          RESPONSE=$(curl -s -X POST https://gemini.api.endpoint/v1/chat/completions \
-            -H "Authorization: Bearer $GEMINI_API_KEY" \
+          RESPONSE=$(curl -s -X POST"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "model": "gemini-2.0-flash",
