@@ -36,9 +36,8 @@ data = response.json()
 
 print("=== Azure Daily Cost Report ===")
 for row in data["properties"]["rows"]:
-    print("Raw row:", row)
     if len(row) >= 2:
-        service_name = row[0]
+        service_name = row[2]
         cost = row[1]
         print(f"{service_name}: ₹{cost:.2f}")
     else:
