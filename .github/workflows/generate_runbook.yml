@@ -1,0 +1,48 @@
+name: Generate Runbook
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-runbook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Generate runbook using Gemini API
+        id: runbook
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          RESPONSE=$(curl -s -X POST https://gemini.api.endpoint/v1/chat/completions \
+            -H "Authorization: Bearer $GEMINI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "gemini-2.0-flash",
+              "messages": [
+                {"role": "user", "content": "Generate a detailed Markdown runbook for an Azure WebApp CPU alert and auto-recovery workflow. The alert triggers when CPU usage goes above 10%. The auto-recovery is handled by an Azure Function that restarts the WebApp. Include symptoms, troubleshooting, auto-remediation, and logs sections."}
+              ],
+              "max_tokens": 500
+            }')
+
+          echo "$RESPONSE" > response.json
+          # Extract text from response JSON depends on Gemini response structure
+          # Example for extracting completion text using jq:
+          RUNBOOK_TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+
+          echo "$RUNBOOK_TEXT" > RUNBOOK.md
+
+      - name: Commit and push runbook
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add RUNBOOK.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-generated runbook"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
