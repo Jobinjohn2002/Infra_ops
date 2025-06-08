@@ -40,7 +40,7 @@ jobs:
             exit 1
           fi
 
-          echo "$RUNBOOK_TEXT" > RUNBOOK.md
+          echo "$RUNBOOK_TEXT" > README.md
 
       - name: Append Mermaid diagram using Gemini
         env:
@@ -74,13 +74,13 @@ jobs:
             echo '```mermaid'
             echo "$DIAGRAM_TEXT"
             echo '```'
-          } >> RUNBOOK.md
+          } >> README.md
 
       - name: Commit and push runbook
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add RUNBOOK.md
+          git add README.md
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
