@@ -42,6 +42,40 @@ jobs:
 
           echo "$RUNBOOK_TEXT" > RUNBOOK.md
 
+      - name: Append Mermaid diagram using Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          DIAGRAM_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "contents": [
+                {
+                  "parts": [
+                    {"text": "Generate a Mermaid diagram for an Azure WebApp monitored for high CPU usage. When CPU exceeds 10%, an Azure Monitor alert triggers an Azure Function to restart the WebApp. Include Azure Monitor, Action Group, Function App, App Service, and optional Logic App."}
+                  ]
+                }
+              ]
+            }')
+
+          echo "$DIAGRAM_RESPONSE" > diagram_response.json
+          DIAGRAM_TEXT=$(echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+
+          if [ -z "$DIAGRAM_TEXT" ] || [ "$DIAGRAM_TEXT" == "null" ]; then
+            echo "Error: Failed to extract diagram content from Gemini API response."
+            echo "Full API response:"
+            cat diagram_response.json
+            exit 1
+          fi
+
+          {
+            echo ""
+            echo "## Architecture Diagram (Mermaid)"
+            echo '```mermaid'
+            echo "$DIAGRAM_TEXT"
+            echo '```'
+          } >> RUNBOOK.md
+
       - name: Commit and push runbook
         run: |
           git config user.name "github-actions"
@@ -50,7 +84,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto-generated runbook"
+            git commit -m "Auto-generated runbook with diagram"
             git push
           fi
         env:
