@@ -1,283 +1,302 @@
 ```markdown
-# Azure Web App CPU Alert and Auto-Recovery Runbook
+# Azure WebApp High CPU Alert Runbook & Auto-Recovery
 
-This runbook details the process for responding to an Azure Monitor alert indicating high CPU usage (above 10%) on an Azure Web App and outlines the automated recovery process using an Azure Function that restarts the Web App.
+**Document Version:** 1.0
+**Last Updated:** October 26, 2023
+**Author:** GPT-3
 
-## 1. Alert Definition
+This runbook details the procedure to follow when an Azure WebApp CPU alert is triggered. It includes symptom identification, initial troubleshooting steps, auto-remediation (restart), and investigation steps. The alert is configured to trigger when CPU usage exceeds 10% for a sustained period (e.g., 5 minutes). An Azure Function handles the auto-remediation.
 
-*   **Alert Name:** WebApp CPU Usage High
-*   **Signal:** CPU Percentage
-*   **Threshold:** > 10%
-*   **Aggregation Type:** Average
-*   **Aggregation Granularity:** 5 minutes
-*   **Action Group:**  AlertActionGroup (includes email notification to the on-call team and triggers the Auto-Remediation Function)
-*   **Resource:** [Specify your Web App Resource Name]
+## 1. Alert Details
+
+*   **Alert Name:** WebAppHighCPU
+*   **Resource:** `{WebAppName}` (Replace with actual WebApp name)
+*   **Severity:** High
+*   **Trigger Condition:** CPU Percentage > 10% for 5 minutes (Example - adjust as needed)
+*   **Alert Rule Type:** Metric Alert
+*   **Action Group:** `{ActionGroupName}` (Configured to trigger the Azure Function)
+*   **Auto-Remediation:** Enabled (Calls the Azure Function)
+*   **Azure Function Name:** `RestartWebAppFunction`
+*   **Function App Name:** `RecoveryFunctionsApp`
+*   **Resource Group:** `RecoveryFunctionsRG`
 
 ## 2. Symptoms
 
-*   **End-User Impact:**
-    *   Slow web page loading times.
-    *   Application unresponsiveness.
-    *   Possible application errors (e.g., 503 Service Unavailable).
-    *   Increased latency for API calls.
-*   **Monitoring Dashboard:**
-    *   Elevated CPU usage reported in Azure Monitor metrics for the Web App.
-    *   Potential spikes in error rates or latency metrics.
-    *   Increased queue lengths in connected services (e.g., Azure Service Bus).
-*   **Logs:**
-    *   Warning or error messages in the Web App's application logs indicating performance bottlenecks.
-    *   Slow query logs in associated databases.
-    *   Increased request durations in Application Insights (if integrated).
+*   **High CPU Utilization:** Reported by Azure Monitor (above 10%).
+*   **Web Application Slowness/Unresponsiveness:** User-reported slow performance or inability to access the web application.
+*   **Increased Error Rates:** Potential increase in HTTP 500 errors or timeouts.
+*   **Performance Degradation:** Monitoring dashboards may show performance bottlenecks related to CPU.
 
-## 3. Troubleshooting
+## 3. Initial Assessment
 
-Before the auto-remediation kicks in, quickly assess the situation.  Keep this brief as the system is designed to auto-recover.
+**3.1 Check Alert Details:**
 
-1.  **Verify the Alert:** Ensure the alert is still active and hasn't resolved itself.  Check the Azure Monitor alert history.
-2.  **Quick CPU Usage Check:**  Use Azure Portal or Azure CLI to view real-time CPU usage.
+*   **Confirm Alert Triggered:** Verify that the `WebAppHighCPU` alert has indeed triggered in Azure Monitor.
+*   **Validate Timestamp:** Check the timestamp of the alert trigger.
+*   **Resource Scope:** Ensure the alert is triggered for the correct WebApp (`{WebAppName}`).
 
-    *   **Azure Portal:** Navigate to the Web App in the Azure Portal.  Go to "Metrics" and select "CPU Percentage." Set the time range to the last 15 minutes.
-    *   **Azure CLI:**
-        ```bash
-        az monitor metrics list --resource [Resource ID of WebApp] --metric "CpuPercentage" --aggregation "Average" --interval PT5M --timespan PT15M
-        ```
-3.  **Check Related Resources:** Briefly check the health and performance of dependent services (e.g., database, cache).  High CPU usage in the Web App could be a symptom of a problem elsewhere.
+**3.2 Verify Auto-Remediation Status:**
 
-## 4. Auto-Remediation
+*   **Check Azure Function Execution:** Navigate to the `RecoveryFunctionsApp` in the Azure Portal.
+*   **Monitor Function Execution Logs:**
+    *   Go to `Functions` -> `RestartWebAppFunction` -> `Monitor`.
+    *   Look for a recent execution log corresponding to the alert trigger timestamp.
+    *   **Success:** A successful execution indicates the Function attempted to restart the WebApp. Verify the WebApp is back online.
+    *   **Failure:** A failed execution indicates an issue with the Function.  See Section 6 (Logs and Troubleshooting).
 
-This section describes the Azure Function responsible for automatically restarting the Web App.
+## 4. Auto-Remediation (Restart via Azure Function)
 
-### 4.1. Azure Function Details
+The Azure Function `RestartWebAppFunction` is designed to automatically restart the WebApp when triggered.
 
-*   **Function Name:** WebAppRestartFunction
-*   **Function Type:** HTTP Trigger
-*   **Authorization Level:** Function
-*   **Identity:** Managed Identity enabled, with the 'Contributor' role assigned to the Web App resource group.
-*   **Code (Example - Python):**
+**Function Logic:**
 
-    ```python
-    import logging
-    import azure.functions as func
-    import azure.mgmt.web.models as web_models
-    from azure.identity import DefaultAzureCredential
-    from azure.mgmt.web import WebSiteManagementClient
+```python
+# Example Python Azure Function Code (adjust for your setup and authentication)
+import logging
+import azure.functions as func
+import azure.mgmt.web
+from azure.identity import DefaultAzureCredential
+
+def main(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request.')
+
+    web_app_name = '{WebAppName}' # Replace with your WebApp name
+    resource_group = '{WebAppResourceGroup}' # Replace with your WebApp resource group
+    subscription_id = '{AzureSubscriptionID}' # Replace with your Azure Subscription ID
+
+    try:
+        # Authenticate using Managed Identity or Service Principal
+        credential = DefaultAzureCredential()
+
+        # Create a WebAppsManagementClient
+        web_client = azure.mgmt.web.WebAppsManagementClient(credential, subscription_id)
+
+        # Restart the WebApp
+        web_client.web_apps.restart(resource_group, web_app_name)
+        logging.info(f"Successfully restarted WebApp: {web_app_name}")
+
+        return func.HttpResponse(
+             f"Restarted WebApp {web_app_name}.",
+             status_code=200
+        )
+
+    except Exception as e:
+        logging.error(f"Error restarting WebApp: {e}")
+        return func.HttpResponse(
+             f"Error restarting WebApp: {e}",
+             status_code=500
+        )
+
+if __name__ == "__main__":
     import os
+    os.environ["AzureWebJobsStorage"] = ""  # Local Testing: Remove in production
+    req = func.HttpRequest(
+            method='GET',
+            url='/api/RestartWebAppFunction',
+            body=b'',
+            params={}
+    )
+    resp = main(req)
+    print(resp.get_body())
+```
 
-    def main(req: func.HttpRequest) -> func.HttpResponse:
-        logging.info('Python HTTP trigger function processed a request.')
+**4.1 Verify WebApp Restart:**
 
-        # Retrieve function key (or other authentication method)
-        function_key = os.environ.get("WebAppRestartFunction_CODE")
-        if not function_key:
-            return func.HttpResponse(
-                 "Please pass a function key in the request headers.",
-                 status_code=400
-            )
+*   **Check WebApp Status:**  Navigate to the WebApp in the Azure Portal and check its status. It should be running.
+*   **Test Application Functionality:**  Access the web application to verify that it is responsive and functioning correctly.
+*   **Monitor CPU Usage:** Observe the CPU usage in Azure Monitor.  If the restart was successful, CPU usage should have dropped below the threshold.
 
-        # Verify function key
-        if req.headers.get("x-functions-key") != function_key:
-            return func.HttpResponse(
-                 "Invalid function key.",
-                 status_code=401
-            )
+**If Auto-Remediation Fails or CPU Remains High (Proceed to further investigation)**
 
+## 5. Detailed Troubleshooting
 
-        try:
-            # Azure Resource Details (retrieve from environment variables for better config)
-            subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"] # e.g., "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            resource_group_name = os.environ["RESOURCE_GROUP_NAME"] # e.g., "my-resource-group"
-            web_app_name = os.environ["WEB_APP_NAME"] # e.g., "mywebapp"
+If the auto-remediation fails to resolve the issue, perform the following steps:
 
-            # Authenticate using Managed Identity
-            credential = DefaultAzureCredential()
+**5.1 Identify the Cause of High CPU:**
 
-            # Create WebSiteManagementClient
-            web_client = WebSiteManagementClient(credential, subscription_id)
+*   **Azure App Service Diagnostics:**  Azure provides built-in diagnostics for App Services. Access them through the WebApp's blade in the Azure Portal under "Diagnose and solve problems."  Explore options like:
+    *   **CPU Analysis:**  Provides insights into processes contributing to high CPU.
+    *   **Memory Analysis:**  Examine memory usage patterns, which can indirectly affect CPU.
+    *   **Availability and Performance:**  Review overall performance metrics.
+*   **App Service Logs:**  Examine the WebApp's application logs for any errors or warnings that might indicate the cause of high CPU.  Access logs through:
+    *   **Log stream:** Real-time logging from the WebApp.
+    *   **Kudu Debug Console:** Allows you to browse the file system and view log files directly. (Access Kudu by navigating to `https://<your_web_app_name>.scm.azurewebsites.net/`)
+*   **Azure Monitor Logs (if configured):** If you have configured Azure Monitor Logs, query the logs for events related to the WebApp's performance. Useful KQL queries include:
+    ```kusto
+    AppServiceAppLogs
+    | where TimeGenerated > ago(1h)
+    | where AppName == "{WebAppName}"
+    | project TimeGenerated, Message, SourceContext
+    | sort by TimeGenerated desc
 
-            # Restart the Web App
-            web_client.web_apps.restart(resource_group_name, web_app_name)
-            logging.info(f"Web App '{web_app_name}' restarted successfully.")
-
-            return func.HttpResponse(
-                 f"Web App '{web_app_name}' restarted successfully.",
-                 status_code=200
-            )
-
-        except Exception as e:
-            logging.error(f"Error restarting Web App: {e}")
-            return func.HttpResponse(
-                 f"Error restarting Web App: {e}",
-                 status_code=500
-            )
-
-
-    if __name__ == "__main__":
-        # This section is for local testing only.  Set environment variables before running.
-        #  Example: export AZURE_SUBSCRIPTION_ID="YOUR_SUBSCRIPTION_ID"
-        import os
-        os.environ["AZURE_SUBSCRIPTION_ID"] = "YOUR_SUBSCRIPTION_ID"
-        os.environ["RESOURCE_GROUP_NAME"] = "YOUR_RESOURCE_GROUP"
-        os.environ["WEB_APP_NAME"] = "YOUR_WEB_APP_NAME"
-        os.environ["WebAppRestartFunction_CODE"] = "YOUR_FUNCTION_KEY" # Important for testing locally
-
-
-        # Create a dummy HttpRequest object for testing
-        class MockHttpRequest:
-            def __init__(self, headers={}):
-                self.headers = headers
-
-        req = MockHttpRequest(headers={"x-functions-key": os.environ["WebAppRestartFunction_CODE"]})
-        response = main(req)
-        print(response.get_body())
-        print(response.status_code)
-
+    AppServiceHTTPLogs
+    | where TimeGenerated > ago(1h)
+    | where AppName == "{WebAppName}"
+    | summarize count() by bin(TimeGenerated, 1m), ResultDescription
+    | render timechart
     ```
+*   **Profiling (Advanced):** Use Azure Profiler or other profiling tools to identify the specific code sections consuming the most CPU. This requires more in-depth application knowledge.
 
-    **Important considerations for the Azure Function:**
+**5.2 Common Causes of High CPU:**
 
-    *   **Function Key Security:** The function key provides authorization.  Treat it like a password. Rotate it periodically and protect it.  Store it securely in Azure Key Vault and retrieve it as an environment variable.
-    *   **Environment Variables:** Store the `AZURE_SUBSCRIPTION_ID`, `RESOURCE_GROUP_NAME`, `WEB_APP_NAME`, and `WebAppRestartFunction_CODE` as application settings in the Function App configuration. This makes the function more portable and easier to manage. *Do not hardcode these values in the script.*
-    *   **Managed Identity:**  Enabling a managed identity is the recommended authentication method for accessing Azure resources from Azure Functions. Assign the necessary role (e.g., 'Contributor') to the managed identity.  This eliminates the need to store credentials in your code or configuration.
-    *   **Error Handling:**  Implement robust error handling to catch exceptions and log them appropriately.  Consider adding retry logic for transient errors.
-    *   **Logging:**  Use the `logging` module to log important events, such as the start and end of the function execution, and any errors that occur.  This will help you troubleshoot issues.
-    *   **Idempotency:** Restarting a Web App is typically idempotent.  However, consider adding logic to prevent the function from being executed multiple times in rapid succession if the alert fires repeatedly. You can use Azure Durable Functions or a distributed lock for this.
-*   **Function Trigger:** HTTP trigger with a function key for authentication.
-*   **Dependencies:** Requires the `azure-functions`, `azure-mgmt-web`, `azure-identity` and `azure-mgmt-core` Python packages.  Use a `requirements.txt` file for managing dependencies:
+*   **Code Bugs:**  Inefficient code, infinite loops, or resource leaks.
+*   **High Traffic:**  Unexpectedly high user load.
+*   **Long-Running Processes:**  Scheduled tasks or background processes consuming excessive CPU.
+*   **Database Bottlenecks:**  Slow database queries or connection issues.
+*   **External Dependencies:**  Issues with external services or APIs used by the application.
+*   **Security Threats:**  Malicious activity, such as denial-of-service attacks.
 
-    ```
-    azure-functions
-    azure-mgmt-web
-    azure-identity
-    azure-mgmt-core
-    ```
+**5.3 Mitigation Steps (After Identifying the Cause):**
 
-### 4.2. Action Group Configuration
+*   **Code Optimization:**  Fix any identified code bugs or performance bottlenecks.
+*   **Scaling Up/Out:**  Increase the App Service Plan size (Scale Up) or add more instances (Scale Out) to handle increased load.
+*   **Throttling:** Implement request throttling or rate limiting to prevent overload.
+*   **Database Optimization:**  Optimize database queries and indexes.
+*   **Caching:**  Implement caching strategies to reduce database load.
+*   **Service Restarts (Selective):** If a specific process is identified as the culprit, consider restarting only that process instead of the entire WebApp. (This might not be possible depending on your application's architecture).
+*   **Security Measures:**  Implement security measures to protect against malicious activity.
+*   **Rollback:** If a recent deployment caused the issue, consider rolling back to a previous version.
 
-The Action Group triggered by the Azure Monitor alert should be configured as follows:
+## 6. Logs and Troubleshooting (Function and Alerting)
 
-*   **Actions:**
-    *   **Action Type:** Azure Function
-    *   **Function App:** [Your Function App Name]
-    *   **Function:** WebAppRestartFunction
-    *   **HTTP Request Body:**  (Optional - you can leave this blank as the function retrieves the necessary parameters from environment variables) A JSON payload can be passed, but it's usually not necessary when the Function is configured with environment variables.
-    *   **Use common alert schema:** Yes
+**6.1 Azure Function Logs:**
 
-### 4.3. Expected Outcome
+*   **Accessing Logs:** Navigate to the `RecoveryFunctionsApp` in the Azure Portal.
+    *   `Functions` -> `RestartWebAppFunction` -> `Monitor`.
+    *   Consider enabling Application Insights for the Function App for more detailed logging and analytics.
 
-The Azure Function, when triggered, will restart the Web App. This will typically resolve the high CPU issue by clearing the process memory and restarting the application pool.
+**6.2 Common Function Errors:**
 
-## 5. Verification
+*   **Authentication Issues:** The Function may not have sufficient permissions to restart the WebApp.  Ensure that the Function's Managed Identity or Service Principal has the `Contributor` role or a custom role with the `Microsoft.Web/sites/restart/action` permission on the WebApp or Resource Group.
+*   **WebApp Not Found:** Verify that the `web_app_name` and `resource_group` variables in the Function code are correct.
+*   **Service Unavailable:**  Azure services might be temporarily unavailable. Implement retry logic in the Function.
+*   **Missing Dependencies:** The Function might be missing required Python packages.  Ensure that the `requirements.txt` file includes all necessary dependencies and that they are deployed correctly.
 
-After the auto-remediation is triggered, verify the following:
+**6.3 Azure Monitor Alert Troubleshooting:**
 
-1.  **Function Execution Success:** Check the logs of the Azure Function (WebAppRestartFunction) in the Azure Portal to confirm that the function executed successfully.
-2.  **Web App Status:**  Confirm that the Web App has been restarted. In the Azure Portal, navigate to the Web App and check the "Overview" section.  The "Status" should indicate that the Web App is running.
-3.  **CPU Usage Reduction:** Monitor the CPU usage of the Web App in Azure Monitor.  The CPU usage should return to normal levels (below the alert threshold of 10%) within a reasonable timeframe (e.g., 5-10 minutes).  Use the same Azure Portal/CLI commands from the Troubleshooting section to verify.
-4.  **Application Functionality:**  Test the application's core functionalities (e.g., loading key pages, submitting forms) to ensure that the restart did not introduce any new issues.
-
-## 6. Logs
-
-*   **Azure Monitor Logs:**
-    *   **Web App Logs:** Examine the Web App's application logs for any errors or warnings that occurred before the alert and after the restart.  Look for patterns or recurring issues that may be contributing to the high CPU usage. Access via App Service Logs.
-    *   **Azure Function Logs:** Review the logs of the Azure Function (WebAppRestartFunction) to confirm successful execution and identify any errors.  Access via Monitor -> Logs in the Function App.
-    *   **Azure Activity Log:** Review the Azure Activity Log for events related to the Web App restart. This log can be accessed through the Azure Portal's "Activity Log" blade.
-*   **Application Insights (if integrated):**
-    *   Examine performance metrics (e.g., request duration, exceptions) for the Web App.
-    *   Analyze traces to identify slow or problematic code paths.
+*   **Incorrect Alert Rule Configuration:** Verify that the alert rule is correctly configured, including the metric, threshold, and evaluation frequency.
+*   **Disabled Alert Rule:** Ensure that the alert rule is enabled.
+*   **Action Group Issues:**
+    *   Verify that the Action Group is correctly configured and associated with the alert rule.
+    *   Check the Action Group's history to see if the Azure Function was triggered.
+    *   Confirm that the Action Group has permissions to trigger the Azure Function (if using HTTP Trigger).  If using a queue trigger, ensure the correct permissions are in place for the Function to access the queue.
 
 ## 7. Escalation
 
-If the auto-remediation fails to resolve the issue or if the high CPU usage persists after the Web App restart:
+If the problem persists or you are unable to identify the root cause, escalate to the appropriate support team, providing the following information:
 
-1.  **Escalate to the On-Call Engineer:** The Action Group should include an email notification to the on-call team if the alert remains active for a specified period (e.g., 15 minutes) after the auto-remediation is triggered.
-2.  **Provide Context:**  The on-call engineer should have access to the following information:
-    *   The alert details (including the threshold and time of occurrence).
-    *   The results of the initial troubleshooting steps.
-    *   The logs from the Azure Function and the Web App.
+*   Alert Details (from Section 1)
+*   Troubleshooting Steps Taken (and their results)
+*   Function Logs
+*   WebApp Logs
+*   Diagnostic Reports
+*   Suspected Cause (if any)
 
-## 8. Post-Incident Analysis
+## 8. Post-Incident Review
 
-After the incident is resolved, conduct a post-incident analysis to:
+After the incident is resolved, conduct a post-incident review to:
 
-1.  **Identify the Root Cause:** Determine the underlying cause of the high CPU usage.  This may require further investigation of the application code, database queries, or infrastructure.
-2.  **Prevent Future Occurrences:** Implement measures to prevent similar incidents from occurring in the future.  This may include:
-    *   Optimizing application code.
-    *   Tuning database queries.
-    *   Increasing the resources allocated to the Web App (e.g., scaling up to a larger App Service Plan).
-    *   Implementing caching mechanisms.
-    *   Adding or improving monitoring and alerting.
-3.  **Improve the Runbook:** Update this runbook with any lessons learned from the incident.
+*   Identify the root cause of the high CPU.
+*   Determine if the auto-remediation was effective.
+*   Identify any gaps in the monitoring or alerting setup.
+*   Implement preventative measures to avoid future incidents.
+*   Update the runbook based on lessons learned.
 
-## 9. Testing
+## 9. Appendix
 
-*   **Simulate High CPU:** Use a load testing tool or inject a CPU-intensive task into the Web App to simulate high CPU usage.
-*   **Verify Alert Trigger:** Ensure that the Azure Monitor alert is triggered when the CPU usage exceeds the threshold.
-*   **Confirm Auto-Remediation:** Verify that the Azure Function is triggered by the alert and that it successfully restarts the Web App.
-*   **Monitor Recovery:** Monitor the CPU usage of the Web App after the restart to ensure that it returns to normal levels.
-*   **Test Escalation:** Verify that the email notification is sent to the on-call team if the auto-remediation fails.
+*   **Kudu Debug Console:** Access via `https://<your_web_app_name>.scm.azurewebsites.net/`
+*   **Azure App Service Diagnostics:** Available in the Azure Portal for your WebApp under "Diagnose and solve problems."
 
-By implementing this runbook and automating the recovery process, you can quickly respond to high CPU usage issues in your Azure Web App and minimize the impact on your users.  Remember to regularly review and update this runbook to reflect changes in your application and infrastructure.
-```
+**Note:** Replace the placeholder values (e.g., `{WebAppName}`, `{WebAppResourceGroup}`, `{AzureSubscriptionID}`, `{ActionGroupName}`) with your actual values.  This runbook provides a starting point and may need to be customized based on your specific application and environment.  Adjust trigger thresholds and monitoring intervals as needed. Remember to implement appropriate security measures, especially when using Managed Identities or Service Principals. Regularly review and update this runbook.
 
 ## Architecture Diagram (Mermaid)
 ```mermaid
 ```mermaid
 graph LR
-    subgraph Azure Resources
-      A[WebApp (App Service)]
-      B[Azure Monitor (Alert Rule)]
-      C[Action Group]
-      D[Function App (HTTP Trigger)]
-      E[Logic App (Optional)]
+    subgraph Azure Resource Group
+        A[WebApp (App Service)] --> B{Azure Monitor};
+        B --> C{Action Group};
+        C --> D[Function App (WebApp Restart)];
+
+        style A fill:#f9f,stroke:#333,stroke-width:2px
+        style B fill:#ccf,stroke:#333,stroke-width:2px
+        style C fill:#ddf,stroke:#333,stroke-width:2px
+        style D fill:#eef,stroke:#333,stroke-width:2px
+
+        subgraph Optional
+          E[Logic App (Orchestration)];
+          C --> E;
+          style E fill:#fdf,stroke:#333,stroke-width:2px
+        end
     end
 
-    A --> B: CPU Usage
-    B --> C: Alert (CPU > 10%)
-    C --> D: Triggers (HTTP Request)
-    D --> A: Restarts WebApp
-    C --> E: Optional: Triggers
-    E --> D: Optional: Orchestration
+    B -- CPU > 10% --> C;
+    D --> A;
 
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#ccf,stroke:#333,stroke-width:2px
-    style C fill:#ccf,stroke:#333,stroke-width:2px
-    style D fill:#f9f,stroke:#333,stroke-width:2px
-    style E fill:#ccf,stroke:#333,stroke-width:2px
+    linkStyle 0,1,2,3 stroke-width:2px;
 
-    subgraph Notes
-    F[CPU usage monitored by Azure Monitor\nAlert triggers when threshold exceeded (10%)]
-    G[Action Group configured to trigger Function App]
-    H[Function App receives HTTP request and restarts WebApp]
-    I[Logic App (optional) can add\ncomplex orchestration logic]
+    classDef box fill:#f9f,stroke:#333,stroke-width:2px;
+    class A box;
+
+    classDef monitor fill:#ccf,stroke:#333,stroke-width:2px;
+    class B monitor;
+
+    classDef actiongroup fill:#ddf,stroke:#333,stroke-width:2px;
+    class C actiongroup;
+
+    classDef functionapp fill:#eef,stroke:#333,stroke-width:2px;
+    class D functionapp;
+
+    classDef logicapp fill:#fdf,stroke:#333,stroke-width:2px;
+    class E logicapp;
+
+    subgraph Legend
+      L1[WebApp (App Service) - The Azure web app being monitored.];
+      L2[Azure Monitor - Monitors metrics and triggers alerts.];
+      L3[Action Group - Defines actions triggered by alerts (in this case, calling the Function App).];
+      L4[Function App - Restarts the WebApp.];
+      L5[Logic App (Optional) - Can be used for more complex orchestration, like notifying on restart or implementing throttling.];
     end
-
-    linkStyle 0,1,2,3,4 stroke-width:2px,stroke:#333,color:black;
 ```
 
 **Explanation:**
 
-*   **Azure Resources:**  This subgraph groups all the Azure components used in the monitoring and remediation solution.
-*   **WebApp (App Service):**  The target web application we want to monitor and restart.  Styled with a light pink fill to represent a PaaS resource.
-*   **Azure Monitor (Alert Rule):**  This service continuously monitors the WebApp's CPU usage. An alert rule is configured to trigger when the CPU usage exceeds a predefined threshold (10% in this example).  Styled with light blue fill representing a monitoring service.
-*   **Action Group:** When the Azure Monitor alert is triggered, it sends a notification to the Action Group. The Action Group is configured to trigger the Function App via an HTTP request.  Styled with light blue fill representing a configuration/management service.
-*   **Function App (HTTP Trigger):** This serverless function receives the HTTP request from the Action Group.  The function code then restarts the WebApp using the Azure SDK (or Azure CLI). Styled with a light pink fill to represent a PaaS/compute resource.
-*   **Logic App (Optional):** A Logic App can be optionally used to provide more complex orchestration. For example, before restarting the WebApp, it could send a notification, check other resources, or perform a rolling restart across multiple instances. Styled with light blue fill representing a workflow service.
-*   **Arrows:** The arrows indicate the flow of events and actions:
-    *   WebApp CPU usage is monitored by Azure Monitor.
-    *   Azure Monitor triggers an alert when the CPU exceeds 10%.
-    *   The alert sends a notification to the Action Group.
-    *   The Action Group triggers the Function App.
-    *   The Function App restarts the WebApp.
-    *   Optionally, the Action Group can trigger a Logic App for more complex orchestration, which then calls the Function App.
-*   **Notes:** The Notes subgraph provides additional context and explanation for each component and its role in the solution.
+*   **Azure Resource Group:** A container for all the Azure resources.  This helps logically group related resources together for management.
 
-**Key improvements and considerations:**
+*   **WebApp (App Service):** The Azure WebApp that is being monitored.
 
-*   **Clearer Arrows and Flow:**  The arrow directions explicitly show the data flow and the triggering events.
-*   **Consistent Styling:** All resources have a defined style, making the diagram easier to read.
-*   **Optional Logic App:**  The Logic App is correctly shown as an optional component, and its role in orchestration is described.
-*   **Detailed Notes:**  The notes section provides explanations for each component and the configuration required.  This helps understanding the purpose of each element.
-*   **Azure Resource Styling:** Uses consistent styling for Azure Monitor and Action Groups (management) and WebApp and Function App (PaaS/Compute).
+*   **Azure Monitor:** Monitors the WebApp's CPU usage. When the CPU usage exceeds 10%, it triggers an alert.
 
-This improved diagram provides a more complete and understandable representation of the Azure WebApp monitoring and auto-remediation solution. Remember to install the Mermaid extension in your code editor or use an online Mermaid editor to render the diagram.
+*   **CPU > 10%:**  An edge indicating the condition that triggers the alert.
+
+*   **Action Group:**  Configured in Azure Monitor to specify the action to be taken when the alert is triggered.  In this case, it calls the Function App.
+
+*   **Function App (WebApp Restart):** An Azure Function that contains the code to restart the WebApp.  This function is triggered by the Action Group.
+
+*   **Logic App (Optional):**  An optional Azure Logic App that can be used for more complex orchestration.  For example, it could be used to:
+    *   Send a notification when the WebApp is restarted.
+    *   Implement throttling to prevent too many restarts in a short period.
+    *   Log the restarts.
+
+*   **Legend:** A section explaining each component.
+
+**How it works:**
+
+1.  Azure Monitor continuously monitors the CPU usage of the WebApp.
+2.  If the CPU usage exceeds 10%, Azure Monitor triggers an alert.
+3.  The alert triggers the Action Group.
+4.  The Action Group executes the Azure Function.
+5.  The Azure Function restarts the WebApp.
+6.  Optionally, the Action Group could trigger a Logic App for more complex handling.
+
+**Key Improvements in this Version:**
+
+*   **Explicit Condition:** Added the `CPU > 10%` edge label to clearly show the alert trigger condition.
+*   **Legend:** A helpful legend explaining each component in the diagram.
+*   **Resource Group:**  Added an overall Azure Resource Group to represent the container for all the resources.
+*   **Clearer Descriptions:** Improved the descriptions of each component.
+*   **Styling:** Used styles to highlight each component type.
+*   **Function App Label:** Clarified the Function App's purpose: `WebApp Restart`.
+*   **Optional Logic App Description:** Added examples of how a Logic App could be used.
+*   **Link Style:** Set the link style to have a thicker line, making them easier to see.
 ```
