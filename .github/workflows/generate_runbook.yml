@@ -3,6 +3,9 @@ name: Generate Runbook
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   generate-runbook:
     runs-on: ubuntu-latest
