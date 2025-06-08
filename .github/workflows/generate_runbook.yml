@@ -15,8 +15,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Corrected curl command for Gemini API
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$GEMINI_API_KEY" \
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "contents": [
@@ -29,11 +28,8 @@ jobs:
             }')
 
           echo "$RESPONSE" > response.json
-          # Corrected jq extraction for Gemini API response
-          # Gemini API response structure: .candidates[0].content.parts[0].text
           RUNBOOK_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
 
-          # Check if RUNBOOK_TEXT is empty or null, which might happen if the API response is not as expected
           if [ -z "$RUNBOOK_TEXT" ] || [ "$RUNBOOK_TEXT" == "null" ]; then
             echo "Error: Failed to extract runbook content from Gemini API response."
             echo "Full API response:"
