@@ -1,4 +1,4 @@
-name: Generate Runbook
+name: Generate Runbook with Diagram
 
 on:
   push:
@@ -12,13 +12,23 @@ permissions:
 jobs:
   generate-runbook:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v2
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y npm curl unzip fonts-freefont-ttf
+          sudo npm install -g @mermaid-js/mermaid-cli puppeteer
+
+      - name: Install Chrome for Puppeteer
+        run: |
+          npx puppeteer browsers install chrome
+        env:
+          PUPPETEER_CACHE_DIR: ~/.cache/puppeteer
+
       - name: Generate runbook using Gemini API
-        id: runbook
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -36,16 +46,9 @@ jobs:
 
           echo "$RESPONSE" > response.json
           RUNBOOK_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
-
-          if [ -z "$RUNBOOK_TEXT" ] || [ "$RUNBOOK_TEXT" == "null" ]; then
-            echo "Error: Failed to extract runbook content from Gemini API response."
-            cat response.json
-            exit 1
-          fi
-
           echo "$RUNBOOK_TEXT" > README.md
 
-      - name: Generate Mermaid diagram using Gemini
+      - name: Generate Mermaid diagram text
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -61,46 +64,26 @@ jobs:
               ]
             }')
 
-          echo "$DIAGRAM_RESPONSE" > diagram_response.json
           DIAGRAM_TEXT=$(echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
-
-          if [ -z "$DIAGRAM_TEXT" ] || [ "$DIAGRAM_TEXT" == "null" ]; then
-            echo "Error: Failed to extract diagram content from Gemini API response."
-            cat diagram_response.json
-            exit 1
-          fi
-
           echo "$DIAGRAM_TEXT" > diagram.mmd
 
-      - name: Install dependencies for Mermaid CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl npm
-          sudo npm install -g @mermaid-js/mermaid-cli
-          npx puppeteer browsers install chrome
-
-
-      - name: Convert Mermaid diagram to PNG
+      - name: Generate PNG from Mermaid
         run: |
           mmdc -i diagram.mmd -o diagram.png
 
-      - name: Embed diagram image in README
+      - name: Embed image in README
         run: |
-          {
-            echo ""
-            echo "## Architecture Diagram (Image)"
-            echo "![Architecture Diagram](diagram.png)"
-          } >> README.md
+          echo -e "\n## Architecture Diagram\n\n![Diagram](diagram.png)" >> README.md
 
       - name: Commit and push runbook
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add README.md diagram.png
+          git add README.md diagram.*
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto-generated runbook with architecture diagram"
+            git commit -m "Auto-generated runbook with diagram"
             git push
           fi
         env:
