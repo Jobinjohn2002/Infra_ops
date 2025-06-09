@@ -119,17 +119,11 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          # Configure Git user details for the commit
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          # Stage the README.md and diagram files
           git add README.md diagram.*
-          # Only commit if there are actual changes to prevent empty commits
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Auto-generated runbook with diagram image"
-            git push
-          fi
+          # Temporarily remove the diff check to force a commit
+          git commit -m "Auto-generated runbook with diagram image" || true # || true prevents script from failing if no changes
+          git push
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for pushing changes to the repository
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
