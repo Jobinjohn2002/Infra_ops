@@ -19,16 +19,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y npm curl unzip fonts-freefont-ttf
-          sudo npm install -g @mermaid-js/mermaid-cli puppeteer
+          sudo apt-get install -y wget unzip curl fonts-freefont-ttf
 
-      - name: Install Chrome for Puppeteer
-        run: |
-          npx puppeteer browsers install chrome
-        env:
-          PUPPETEER_CACHE_DIR: ~/.cache/puppeteer
+          # Install Chrome manually (Puppeteer expects version 131.x)
+          wget https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.204/linux64/chrome-linux64.zip
+          unzip chrome-linux64.zip
+          sudo mv chrome-linux64 /opt/chrome
+          sudo ln -s /opt/chrome/chrome /usr/bin/google-chrome
 
-      - name: Generate runbook using Gemini API
+          # Install Node and Mermaid CLI
+          sudo apt-get install -y npm
+          sudo npm install -g @mermaid-js/mermaid-cli
+
+      - name: Generate runbook from Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -48,7 +51,7 @@ jobs:
           RUNBOOK_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
           echo "$RUNBOOK_TEXT" > README.md
 
-      - name: Generate Mermaid diagram text
+      - name: Generate Mermaid diagram from Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -64,10 +67,12 @@ jobs:
               ]
             }')
 
-          DIAGRAM_TEXT=$(echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
-          echo "$DIAGRAM_TEXT" > diagram.mmd
+          echo "$DIAGRAM_RESPONSE" > diagram_response.json
+          echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > diagram.mmd
 
       - name: Generate PNG from Mermaid
+        env:
+          PUPPETEER_EXECUTABLE_PATH: /opt/chrome/chrome
         run: |
           mmdc -i diagram.mmd -o diagram.png
 
@@ -75,7 +80,7 @@ jobs:
         run: |
           echo -e "\n## Architecture Diagram\n\n![Diagram](diagram.png)" >> README.md
 
-      - name: Commit and push runbook
+      - name: Commit and push changes
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -83,8 +88,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto-generated runbook with diagram"
+            git commit -m "Auto-generated runbook with diagram image"
             git push
-          fi
         env:
-          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
