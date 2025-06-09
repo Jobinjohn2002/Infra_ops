@@ -14,22 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3 # Use a more recent version of checkout
 
-      - name: Install dependencies
+      - name: Setup Node.js
+        uses: actions/setup-node@v3 # Use setup-node action
+        with:
+          node-version: '18' # Specify a recent Node.js version
+
+      - name: Install Mermaid CLI and Puppeteer dependencies
         run: |
+          npm install -g @mermaid-js/mermaid-cli
+          # Install Puppeteer's browser dependencies - this is crucial
           sudo apt-get update
-          sudo apt-get install -y wget unzip curl fonts-freefont-ttf
-
-          # Install Chrome manually (Puppeteer expects version 131.x)
-          wget https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.204/linux64/chrome-linux64.zip
-          unzip chrome-linux64.zip
-          sudo mv chrome-linux64 /opt/chrome
-          echo "Skipping symlink creation; using custom chrome path instead"
-
-          # Install Node and Mermaid CLI
-          sudo apt-get install -y npm
-          sudo npm install -g @mermaid-js/mermaid-cli
+          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2
 
       - name: Generate runbook from Gemini
         env:
@@ -70,21 +67,16 @@ jobs:
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
           echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > diagram.mmd
 
-      - name: Install Chromium browser
-        run: |
-          sudo apt update
-          sudo apt install -y chromium-browser
-
-      - name: Create Puppeteer config
-        run: |
-          echo '{ "executablePath": "/usr/bin/chromium-browser", "args": ["--no-sandbox"] }' > puppeteer-config.json
-
       - name: Generate PNG from Mermaid
-        env:
-          PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
-          MMD_CHROME_ARGS: --no-sandbox
         run: |
-          mmdc -i diagram.mmd -o diagram.png
+          mmdc -i diagram.mmd -o diagram.png -p /usr/bin/google-chrome-stable --puppeteerConfigFile ./puppeteer-config.json
+          # Note: The Puppeteer config file approach is sometimes more reliable than env vars.
+          # We'll create a simple config file in the next step.
+
+      - name: Create Puppeteer config for `mmdc`
+        # This step should be placed *before* "Generate PNG from Mermaid"
+        run: |
+          echo '{ "executablePath": "/usr/bin/google-chrome-stable", "args": ["--no-sandbox", "--disable-setuid-sandbox"] }' > puppeteer-config.json
 
       - name: Embed image in README
         run: |
@@ -100,5 +92,6 @@ jobs:
           else
             git commit -m "Auto-generated runbook with diagram image"
             git push
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
