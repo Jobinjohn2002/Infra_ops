@@ -17,16 +17,16 @@ jobs:
         uses: actions/checkout@v3 # Use a more recent version of checkout
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3 # Use setup-node action
+        uses: actions/setup-node@v3 # Use setup-node action for Node.js environment
         with:
-          node-version: '18' # Specify a recent Node.js version
+          node-version: '18' # Specify a recent Node.js version, e.g., 18 or 20
 
       - name: Install Mermaid CLI and Puppeteer dependencies
         run: |
           npm install -g @mermaid-js/mermaid-cli
-          # Install Puppeteer's browser dependencies - this is crucial
+          # Install system dependencies required by Puppeteer (headless browser)
           sudo apt-get update
-          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64
+          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64 # Corrected libasound2 to libasound2t64
 
       - name: Generate runbook from Gemini
         env:
@@ -58,24 +58,39 @@ jobs:
               "contents": [
                 {
                   "parts": [
-                    {"text": "Generate a Mermaid diagram for an Azure WebApp monitored for high CPU usage. When CPU exceeds 10%, an Azure Monitor alert triggers an Azure Function to restart the WebApp. Include Azure Monitor, Action Group, Function App, App Service, and optional Logic App."}
+                    {"text": "Generate a Mermaid diagram for an Azure WebApp monitored for high CPU usage. When CPU exceeds 10%, an Azure Monitor alert triggers an Azure Function to restart the WebApp. Include Azure Monitor, Action Group, Function App, App Service, and optional Logic App. Provide only the mermaid diagram code, without any extra text or explanation."}
                   ]
                 }
               ]
             }')
 
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
-          echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > diagram.mmd
 
+          # Extract only the Mermaid diagram block (e.g., '```mermaid ... ```')
+          # and remove the surrounding backticks and 'mermaid' identifier.
+          # This assumes Gemini returns the diagram within a markdown code block.
+          echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | \
+          grep -Pzo '(?s)```mermaid\n(.*?)\n```' | \
+          sed -E 's/```mermaid\n//g; s/\n```//g' > diagram.mmd
+
+      # IMPORTANT: This step *must* come before the "Generate PNG from Mermaid" step
       - name: Create Puppeteer config for mmdc
-        # This step must run BEFORE "Generate PNG from Mermaid"
         run: |
+          # The executablePath might vary depending on how Puppeteer installs Chrome/Chromium.
+          # /usr/bin/google-chrome-stable is a common default for a system-installed Chrome.
+          # Alternatively, you can omit executablePath and let Puppeteer download its own default.
+          # For GitHub Actions, often /usr/bin/google-chrome-stable or just letting Puppeteer handle it works.
           echo '{ "executablePath": "/usr/bin/google-chrome-stable", "args": ["--no-sandbox", "--disable-setuid-sandbox"] }' > puppeteer-config.json
+
 
       - name: Generate PNG from Mermaid
         run: |
-          # The puppeteer-config.json file now exists when mmdc runs
-          mmdc -i diagram.mmd -o diagram.png -p /usr/bin/google-chrome-stable --puppeteerConfigFile ./puppeteer-config.json
+          # Use the puppeteerConfigFile to pass arguments and executable path
+          # -p is usually for specifying the executable path directly, but with a config file,
+          # the config file typically takes precedence for executablePath if specified there.
+          # For clarity, I'm keeping -p here, but it's redundant if executablePath is in the config.
+          # The key is that the config file contains --no-sandbox.
+          mmdc -i diagram.mmd -o diagram.png --puppeteerConfigFile ./puppeteer-config.json
 
       - name: Embed image in README
         run: |
