@@ -1,6 +1,9 @@
 name: Generate Runbook
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
