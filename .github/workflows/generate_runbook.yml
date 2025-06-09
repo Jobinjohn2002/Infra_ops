@@ -25,7 +25,7 @@ jobs:
           wget https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.204/linux64/chrome-linux64.zip
           unzip chrome-linux64.zip
           sudo mv chrome-linux64 /opt/chrome
-          sudo ln -s /opt/chrome/chrome /usr/bin/google-chrome
+          echo "Skipping symlink creation; using custom chrome path instead"
 
           # Install Node and Mermaid CLI
           sudo apt-get install -y npm
