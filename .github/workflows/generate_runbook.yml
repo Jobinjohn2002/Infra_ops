@@ -70,11 +70,18 @@ jobs:
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
           echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > diagram.mmd
 
-      - name: Generate PNG from Mermaid
-        env:
-          MMD_CHROME_ARGS: "--no-sandbox"
+      - name: Install Chromium browser
         run: |
-          mmdc -i diagram.mmd -o diagram.png
+          sudo apt update
+          sudo apt install -y chromium-browser
+
+      - name: Create Puppeteer config
+        run: |
+          echo '{ "executablePath": "/usr/bin/chromium-browser", "args": ["--no-sandbox"] }' > puppeteer-config.json
+
+      - name: Generate PNG from Mermaid
+        run: |
+          mmdc -i diagram.mmd -o diagram.png --puppeteerConfig puppeteer-config.json
 
       - name: Embed image in README
         run: |
