@@ -80,8 +80,11 @@ jobs:
           echo '{ "executablePath": "/usr/bin/chromium-browser", "args": ["--no-sandbox"] }' > puppeteer-config.json
 
       - name: Generate PNG from Mermaid
+        env:
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+          MMD_CHROME_ARGS: --no-sandbox
         run: |
-          mmdc -i diagram.mmd -o diagram.png --puppeteerConfig puppeteer-config.json
+          mmdc -i diagram.mmd -o diagram.png
 
       - name: Embed image in README
         run: |
