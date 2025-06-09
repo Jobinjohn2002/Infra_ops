@@ -4,34 +4,39 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual triggering of the workflow
 
 permissions:
-  contents: write
+  contents: write # Grants permission to write files to the repository
 
 jobs:
   generate-runbook:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Specifies the runner environment
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3 # Use a more recent version of checkout
+      - name: Checkout repository
+        uses: actions/checkout@v3 # Checks out your repository code
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3 # Use setup-node action for Node.js environment
+        uses: actions/setup-node@v3 # Installs Node.js, required for Mermaid CLI
         with:
-          node-version: '18' # Specify a recent Node.js version, e.g., 18 or 20
+          node-version: '18' # Use a stable Node.js version
 
       - name: Install Mermaid CLI and Puppeteer dependencies
         run: |
+          # Install Mermaid CLI globally
           npm install -g @mermaid-js/mermaid-cli
-          # Install system dependencies required by Puppeteer (headless browser)
+
+          # Install system dependencies required by Puppeteer (headless browser).
+          # libasound2t64 is for newer Ubuntu versions (like ubuntu-latest runners).
           sudo apt-get update
-          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64 # Corrected libasound2 to libasound2t64
+          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64
 
       - name: Generate runbook from Gemini
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Access Gemini API key from secrets
         run: |
+          # Call Gemini API to generate the runbook content
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
@@ -44,7 +49,9 @@ jobs:
               ]
             }')
 
+          # Save the raw API response for debugging (optional)
           echo "$RESPONSE" > response.json
+          # Extract and save the runbook text to README.md
           RUNBOOK_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
           echo "$RUNBOOK_TEXT" > README.md
 
@@ -52,55 +59,59 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
+          # Call Gemini API to generate the Mermaid diagram code
           DIAGRAM_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "contents": [
                 {
                   "parts": [
-                    {"text": "Generate a Mermaid diagram for an Azure WebApp monitored for high CPU usage. When CPU exceeds 10%, an Azure Monitor alert triggers an Azure Function to restart the WebApp. Include Azure Monitor, Action Group, Function App, App Service, and optional Logic App. Provide only the mermaid diagram code, without any extra text or explanation."}
+                    {"text": "Generate a Mermaid diagram for an Azure WebApp monitored for high CPU usage. When CPU exceeds 10%, an Azure Monitor alert triggers an Azure Function to restart the WebApp. Include Azure Monitor, Action Group, Function App, App Service, and optional Logic App. Provide ONLY the mermaid diagram code, starting with ```mermaid and ending with ```, with no additional text or explanation."}
                   ]
                 }
               ]
             }')
 
+          # Save the raw API response for debugging (optional)
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
 
-          # Extract only the Mermaid diagram block (e.g., '```mermaid ... ```')
-          # and remove the surrounding backticks and 'mermaid' identifier.
-          # This assumes Gemini returns the diagram within a markdown code block.
+          # *** CRITICAL FIX HERE ***
+          # Extract ONLY the Mermaid diagram block from the Gemini response.
+          # This sed command extracts all lines between '```mermaid' and '```' (exclusive).
           echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | \
-          grep -Pzo '(?s)```mermaid\n(.*?)\n```' | \
-          sed -E 's/```mermaid\n//g; s/\n```//g' > diagram.mmd
+          sed -n '/```mermaid/,/```/{//!p}' > diagram.mmd
 
-      # IMPORTANT: This step *must* come before the "Generate PNG from Mermaid" step
+          # Optional: Print the content of diagram.mmd to check if extraction worked
+          echo "--- Content of diagram.mmd ---"
+          cat diagram.mmd
+          echo "----------------------------"
+
+      # *** CRITICAL FIX HERE: Order of steps ***
+      # This step MUST run BEFORE "Generate PNG from Mermaid"
       - name: Create Puppeteer config for mmdc
         run: |
-          # The executablePath might vary depending on how Puppeteer installs Chrome/Chromium.
-          # /usr/bin/google-chrome-stable is a common default for a system-installed Chrome.
-          # Alternatively, you can omit executablePath and let Puppeteer download its own default.
-          # For GitHub Actions, often /usr/bin/google-chrome-stable or just letting Puppeteer handle it works.
+          # This config tells Puppeteer where to find a browser and crucial arguments
+          # /usr/bin/google-chrome-stable is a common path for Chrome on Ubuntu runners.
           echo '{ "executablePath": "/usr/bin/google-chrome-stable", "args": ["--no-sandbox", "--disable-setuid-sandbox"] }' > puppeteer-config.json
-
 
       - name: Generate PNG from Mermaid
         run: |
-          # Use the puppeteerConfigFile to pass arguments and executable path
-          # -p is usually for specifying the executable path directly, but with a config file,
-          # the config file typically takes precedence for executablePath if specified there.
-          # For clarity, I'm keeping -p here, but it's redundant if executablePath is in the config.
-          # The key is that the config file contains --no-sandbox.
+          # Use mmdc to convert the .mmd file to .png using the config file
           mmdc -i diagram.mmd -o diagram.png --puppeteerConfigFile ./puppeteer-config.json
 
       - name: Embed image in README
         run: |
+          # Append the diagram image markdown to README.md
           echo -e "\n## Architecture Diagram\n\n![Diagram](diagram.png)" >> README.md
 
       - name: Commit and push changes
         run: |
+          # Configure Git user for the commit
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          # Stage the changed files
           git add README.md diagram.*
+          # Only commit if there are actual changes
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -108,4 +119,4 @@ jobs:
             git push
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for pushing changes to the repo
