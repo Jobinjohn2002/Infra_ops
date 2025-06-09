@@ -34,7 +34,7 @@ def home():
     <body>
         <h1>Hello from Flask on Azure VM!</h1>
         <p>This is for testing. Triggering worked successfully from VS Code!</p>
-        <p>Hey How are you</p>
+        <p>This page is for testing</p>
     </body>
     </html>
     """
