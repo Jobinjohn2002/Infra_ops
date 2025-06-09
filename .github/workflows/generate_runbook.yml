@@ -4,39 +4,39 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allows manual triggering of the workflow
+  workflow_dispatch: # Allows you to trigger this workflow manually from GitHub UI
 
 permissions:
-  contents: write # Grants permission to write files to the repository
+  contents: write # Grants the workflow permission to write files back to the repository
 
 jobs:
   generate-runbook:
-    runs-on: ubuntu-latest # Specifies the runner environment
+    runs-on: ubuntu-latest # Uses the latest Ubuntu runner environment
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3 # Checks out your repository code
+        uses: actions/checkout@v3 # Action to check out your repository code
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3 # Installs Node.js, required for Mermaid CLI
+        uses: actions/setup-node@v3 # Action to set up Node.js, required for Mermaid CLI
         with:
-          node-version: '18' # Use a stable Node.js version
+          node-version: '18' # Specify a stable Node.js version, like 18 or 20
 
       - name: Install Mermaid CLI and Puppeteer dependencies
         run: |
           # Install Mermaid CLI globally
           npm install -g @mermaid-js/mermaid-cli
 
-          # Install system dependencies required by Puppeteer (headless browser).
-          # libasound2t64 is for newer Ubuntu versions (like ubuntu-latest runners).
+          # Install system dependencies required by Puppeteer (the headless browser Mermaid CLI uses).
+          # 'libasound2t64' is the correct package name for newer Ubuntu versions.
           sudo apt-get update
           sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64
 
       - name: Generate runbook from Gemini
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Access Gemini API key from secrets
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Access your Gemini API key from GitHub Secrets
         run: |
-          # Call Gemini API to generate the runbook content
+          # Make a curl request to Gemini API to generate the runbook markdown content
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
@@ -49,9 +49,9 @@ jobs:
               ]
             }')
 
-          # Save the raw API response for debugging (optional)
+          # Save the raw API response (optional, for debugging)
           echo "$RESPONSE" > response.json
-          # Extract and save the runbook text to README.md
+          # Extract the text content from the JSON response and save it to README.md
           RUNBOOK_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
           echo "$RUNBOOK_TEXT" > README.md
 
@@ -59,59 +59,61 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Call Gemini API to generate the Mermaid diagram code
+          # Make a curl request to Gemini API to generate the Mermaid diagram code.
+          # The prompt is highly specific to ensure Gemini outputs valid Mermaid syntax.
           DIAGRAM_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "contents": [
                 {
                   "parts": [
-                    {"text": "Generate a Mermaid diagram for an Azure WebApp monitored for high CPU usage. When CPU exceeds 10%, an Azure Monitor alert triggers an Azure Function to restart the WebApp. Include Azure Monitor, Action Group, Function App, App Service, and optional Logic App. Provide ONLY the mermaid diagram code, starting with ```mermaid and ending with ```, with no additional text or explanation."}
+                    {"text": "Generate a Mermaid **flowchart** diagram (using `graph LR` direction) for an Azure WebApp CPU alert and auto-recovery workflow. The alert triggers when CPU usage goes above 10%, and an Azure Function restarts the WebApp. Include the following components: Azure WebApp, Azure Monitor Alert (for CPU > 10%), Action Group, Azure Function App (to restart WebApp), and an Optional Logic App. Ensure all nodes are simple `[NodeName]` or `{NodeName}`. All links must use `-->` or `-- text -->`. The diagram must be syntactically perfect Mermaid flowchart. Provide ONLY the Mermaid diagram code. Start the output with ```mermaid and end with ```, with no additional text or explanation. Ensure there are NO extra `end` keywords unless correctly closing a `subgraph` block."}
                   ]
                 }
               ]
             }')
 
-          # Save the raw API response for debugging (optional)
+          # Save the raw API response (optional, for debugging)
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
 
-          # *** CRITICAL FIX HERE ***
-          # Extract ONLY the Mermaid diagram block from the Gemini response.
-          # This sed command extracts all lines between '```mermaid' and '```' (exclusive).
+          # *** CRITICAL FIX: Extract ONLY the Mermaid diagram block ***
+          # This 'sed' command specifically extracts lines between '```mermaid' and '```',
+          # ensuring 'diagram.mmd' contains only pure Mermaid syntax.
           echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | \
           sed -n '/```mermaid/,/```/{//!p}' > diagram.mmd
 
-          # Optional: Print the content of diagram.mmd to check if extraction worked
+          # Optional: Print the content of diagram.mmd to the workflow logs for verification
           echo "--- Content of diagram.mmd ---"
           cat diagram.mmd
           echo "----------------------------"
 
-      # *** CRITICAL FIX HERE: Order of steps ***
-      # This step MUST run BEFORE "Generate PNG from Mermaid"
+      # --- CRITICAL FIX: Order of steps is important! ---
+      # This step MUST run BEFORE the 'Generate PNG from Mermaid' step.
       - name: Create Puppeteer config for mmdc
         run: |
-          # This config tells Puppeteer where to find a browser and crucial arguments
-          # /usr/bin/google-chrome-stable is a common path for Chrome on Ubuntu runners.
+          # This configuration tells Puppeteer (used by Mermaid CLI) where to find the browser
+          # executable and passes necessary arguments like '--no-sandbox' for CI environments.
           echo '{ "executablePath": "/usr/bin/google-chrome-stable", "args": ["--no-sandbox", "--disable-setuid-sandbox"] }' > puppeteer-config.json
 
       - name: Generate PNG from Mermaid
         run: |
-          # Use mmdc to convert the .mmd file to .png using the config file
+          # Use mmdc to convert the Mermaid diagram (.mmd) into a PNG image.
+          # It uses the previously created 'puppeteer-config.json' for browser settings.
           mmdc -i diagram.mmd -o diagram.png --puppeteerConfigFile ./puppeteer-config.json
 
       - name: Embed image in README
         run: |
-          # Append the diagram image markdown to README.md
+          # Append the generated diagram image markdown to README.md
           echo -e "\n## Architecture Diagram\n\n![Diagram](diagram.png)" >> README.md
 
       - name: Commit and push changes
         run: |
-          # Configure Git user for the commit
+          # Configure Git user details for the commit
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          # Stage the changed files
+          # Stage the README.md and diagram files
           git add README.md diagram.*
-          # Only commit if there are actual changes
+          # Only commit if there are actual changes to prevent empty commits
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
@@ -119,4 +121,4 @@ jobs:
             git push
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for pushing changes to the repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Required for pushing changes to the repository
