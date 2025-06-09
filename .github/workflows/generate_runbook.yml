@@ -59,19 +59,26 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Make a curl request to Gemini API to generate the Mermaid diagram code.
-          # The prompt is highly specific to ensure Gemini outputs valid Mermaid syntax.
           DIAGRAM_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "contents": [
                 {
                   "parts": [
-                    {"text": "Generate a Mermaid **flowchart** diagram (using `graph LR` direction) for an Azure WebApp CPU alert and auto-recovery workflow. The alert triggers when CPU usage goes above 10%, and an Azure Function restarts the WebApp. Include the following components: Azure WebApp, Azure Monitor Alert (for CPU > 10%), Action Group, Azure Function App (to restart WebApp), and an Optional Logic App. Ensure all nodes are simple `[NodeName]` or `{NodeName}`. All links must use `-->` or `-- text -->`. The diagram must be syntactically perfect Mermaid flowchart. Provide ONLY the Mermaid diagram code. Start the output with ```mermaid and end with ```, with no additional text or explanation. Ensure there are NO extra `end` keywords unless correctly closing a `subgraph` block."}
+                    {"text": "Generate a Mermaid **flowchart** diagram (using `graph LR` direction) for an Azure WebApp CPU alert and auto-recovery workflow. The alert triggers when CPU usage goes above 10%, and an Azure Function restarts the WebApp. Include the following components: Azure WebApp, Azure Monitor Alert (for CPU > 10%), Action Group, Azure Function App (to restart WebApp), and an Optional Logic App. Ensure all nodes are simple `[NodeName]` or `{NodeName}`. All links must be complete and valid, using `-->` or `-- text -->` for connections, or `---` for undirected links. DO NOT use partial link definitions like single hyphens or incomplete arrows. The diagram must be syntactically perfect Mermaid flowchart. Provide ONLY the Mermaid diagram code. Start the output with ```mermaid and end with ```, with no additional text or explanation. Ensure there are NO extra `end` keywords unless correctly closing a `subgraph` block."}
                   ]
                 }
               ]
             }')
+
+          echo "$DIAGRAM_RESPONSE" > diagram_response.json
+
+          echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | \
+          sed -n '/```mermaid/,/```/{//!p}' > diagram.mmd
+
+          echo "--- Content of diagram.mmd ---"
+          cat diagram.mmd
+          echo "----------------------------"
 
           # Save the raw API response (optional, for debugging)
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
