@@ -1,0 +1,10 @@
+graph LR
+    A[Azure WebApp] --> B{Azure Monitor Alert};
+    B -- CPU > 10% --> C[Action Group];
+    C --> D[Azure Function App];
+    D -- Restart WebApp --> A;
+    C --> E[Optional Logic App];
+    E -- Any Custom Logic --> F{Decision};
+    F -- Yes --> D;
+    F -- No --> G[Log Event];
+    G --> C;
