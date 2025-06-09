@@ -1,193 +1,237 @@
 ```markdown
-# Azure WebApp High CPU Utilization Alert Runbook & Auto-Recovery
+# Azure WebApp High CPU Usage Runbook (Auto-Recovery)
 
 **Alert Name:** WebAppHighCPU
 
-**Trigger Condition:** Average CPU Percentage > 10% for 5 minutes.
+**Target:** Azure WebApp
 
-**Affected Resource:** Azure WebApp
+**Trigger Condition:** CPU Usage > 10% for 5 minutes
 
-**Runbook Version:** 1.0
+**Recovery Method:** Azure Function Restart
 
-**Last Updated:** 2023-10-27
+**Last Updated:** October 26, 2023
 
-**Author:** Azure Automation Team
-
-**Purpose:** This runbook provides a detailed guide for responding to and resolving alerts related to high CPU utilization in an Azure WebApp. It includes steps for identifying the root cause, troubleshooting performance issues, and executing auto-remediation using an Azure Function.
+**Purpose:** This runbook outlines the steps to diagnose and remediate high CPU usage on an Azure WebApp. It includes both manual troubleshooting steps and an automated recovery process.
 
 ## 1. Symptoms
 
-*   **Slow Application Response Times:** Users may experience slow page load times or unresponsive application features.
-*   **Application Errors:** The WebApp may return errors due to resource constraints.
-*   **High CPU Utilization:** The WebApp's CPU usage consistently remains above 10%. This will be confirmed by the alert.
-*   **Increased Latency:** Requests to the WebApp take longer to process.
-*   **Degraded Performance:** Overall application performance is noticeably lower than usual.
+*   **End-User Reported Issues:**
+    *   Slow application response times.
+    *   Application timeouts.
+    *   Inability to access the WebApp.
+    *   Error messages in the application UI.
+*   **Alert Triggered:** Azure Monitor Alert "WebAppHighCPU" triggered.
+*   **WebApp Performance:**
+    *   High CPU usage reported in Azure Monitor metrics for the WebApp (e.g., > 10%).
+    *   Increased response times for HTTP requests.
+    *   Increased number of requests queued.
 
-## 2. Troubleshooting
+## 2. Initial Investigation & Triage
 
-### 2.1. Initial Investigation (Within 5 minutes of Alert)
+**2.1 Verify the Alert:**
 
-1.  **Acknowledge the Alert:** Acknowledge the alert in the Azure Portal or your monitoring system to prevent redundant investigations.
-2.  **Verify Alert Accuracy:**
-    *   **Azure Portal:** Navigate to the WebApp's Overview page.
-    *   **Monitoring:**  Examine the CPU Percentage metric chart.  Confirm that the CPU usage is indeed consistently above 10% for the last 5 minutes or more.
-3.  **Check WebApp Health:**
-    *   **Azure Portal:** Navigate to the WebApp's "Diagnose and Solve Problems" section.
-    *   **Run Diagnostics:** Use the "Availability and Performance" and "Performance Bottlenecks" diagnostic tools. Review the recommendations.
-4.  **Check App Service Plan Health:**
-    *   **Azure Portal:** Navigate to the App Service Plan hosting the WebApp.
-    *   **Monitoring:** Examine the App Service Plan's CPU Percentage and Memory Percentage metrics. High CPU usage on the App Service Plan indicates a broader issue affecting all WebApps on the plan.
+*   **Check Azure Monitor:** Review the alert details in Azure Monitor. Confirm the alert is active and that the triggering CPU percentage and time duration align with the configured threshold.
+*   **Assess Impact:** Determine the extent of the impact. Is it affecting all users or a specific subset? Is the application completely unresponsive, or just slower than usual?
 
-### 2.2. In-Depth Analysis (If Initial Investigation Doesn't Resolve)
+**2.2 Gather Initial Information:**
 
-1.  **Azure Metrics Explorer:** Use Azure Metrics Explorer to investigate CPU usage in more detail.
-    *   **Filter by Instance:** If the WebApp has multiple instances, filter the CPU Percentage metric by Instance to identify the instance experiencing high CPU usage.
-    *   **Correlate Metrics:** Correlate CPU usage with other metrics like Memory Percentage, Request Count, and Data In/Out to identify potential causes (e.g., memory leaks, sudden traffic spikes).
-    *   **Time Range:** Increase the time range to get a better historical perspective of CPU usage patterns.
-2.  **Azure App Service Diagnostics:** Utilize the advanced diagnostic tools in the Azure Portal.
-    *   **Proactive Monitoring:** Review the "Proactive Monitoring" section for potential issues.
-    *   **Performance Issues:**  Use the "Performance Issues" detector to identify specific code paths or requests causing high CPU usage.
-    *   **Diagnostic Logs:** Analyze diagnostic logs for errors or warnings that may indicate performance problems. Enable detailed logging if necessary.
-3.  **Kudu (Advanced Users):** Kudu provides advanced debugging and diagnostic capabilities.
-    *   **Access Kudu:** Navigate to `https://<your-webapp-name>.scm.azurewebsites.net/`
-    *   **Process Explorer:** Use the Process Explorer to identify processes consuming high CPU. Note the process ID (PID).
-    *   **Dumps:**  Create memory dumps of the identified processes for offline analysis using tools like PerfView or WinDbg.
-    *   **Console:**  Use the Kudu console to run commands and gather more information about the WebApp's environment.
-4.  **Application Insights (If Integrated):**
-    *   **Performance Analysis:** Use Application Insights to analyze request performance, identify slow dependencies, and pinpoint performance bottlenecks in the application code.
-    *   **Live Metrics Stream:**  Use Live Metrics Stream to observe real-time performance metrics and identify issues as they occur.
-    *   **Profiling:**  Use the profiler to collect detailed call stacks and identify code paths consuming the most CPU time.
-5.  **Possible Causes:**
-    *   **Code Issues:** Inefficient code, memory leaks, or long-running operations.
-    *   **Traffic Spike:** A sudden increase in traffic to the WebApp.
-    *   **External Dependencies:** Slow or unresponsive external dependencies (e.g., databases, APIs).
-    *   **Background Processes:** Resource-intensive background tasks.
-    *   **CPU Starvation:** Contention for CPU resources with other WebApps on the same App Service Plan (if applicable).
-    *   **Configuration Issues:** Incorrect application settings or misconfigured caching.
-    *   **Security Threats:** Malicious attacks or compromised code.
+*   **WebApp Name:** [WebApp Resource Name]
+*   **Resource Group:** [Resource Group Name]
+*   **App Service Plan:** [App Service Plan Name]
+*   **WebApp Instance(s):** (If scaled out, list all instances experiencing high CPU)
+*   **Alert Timestamp:** [Timestamp of Alert Trigger]
+*   **Azure Region:** [Azure Region]
 
-## 3. Auto-Remediation
+## 3. Troubleshooting
 
-**Action:** Restart the Azure WebApp.
+**3.1 Examine WebApp Metrics:**
 
-**Mechanism:** Azure Function triggered by the alert.
+*   **Navigate to the Azure Portal:** Open the Azure Portal and navigate to the WebApp.
+*   **Explore Metrics:** Under "Monitoring," select "Metrics."
+*   **Key Metrics to Analyze:**
+    *   **CPU Percentage:** Confirm that the CPU usage is consistently above the threshold (10%). Look for patterns and spikes.
+    *   **Memory Working Set:** Check if memory usage is also high. High memory usage can sometimes contribute to high CPU.
+    *   **Requests:** Monitor the number of requests being processed. A sudden increase in requests can overload the WebApp.
+    *   **Http Queue Length:** A large queue length indicates the WebApp is struggling to handle the request load.
+    *   **Data In/Data Out:** Monitor network traffic for anomalies.
+    *   **ThreadPool Threads:** Examine the number of threads in use by the .NET thread pool. Thread exhaustion can lead to CPU bottlenecks.
+*   **Diagnostic Tools:** Use Application Insights or App Service Diagnostics (under "Diagnose and solve problems") for more in-depth analysis.
 
-**Function App Name:** WebAppAutoRecoveryFunction
+**3.2 Analyze Application Insights (If Configured):**
 
-**Function Name:** RestartWebApp
+*   **Performance:** Investigate slow requests and dependencies. Identify the slowest transactions and their underlying components.
+*   **Exceptions:** Look for any unhandled exceptions that might be causing the application to loop or consume excessive CPU.
+*   **Live Metrics:**  Use Live Metrics to observe real-time performance data.
 
-**Permissions:** The Function App's Managed Identity needs the "Contributor" role (or a custom role with `Microsoft.Web/sites/restart/action`) on the WebApp.
+**3.3 App Service Diagnostics:**
 
-**Configuration (Azure Function):**
+*   **Navigate to "Diagnose and solve problems" in the WebApp blade.**
+*   **Choose relevant diagnostic tools:**
+    *   **Performance Issues:**  Run the "Performance Issues" diagnostic to identify potential bottlenecks.
+    *   **CPU Analysis:** Utilize the CPU Analysis tool to identify methods or processes consuming the most CPU.
+    *   **Availability and Performance:** Run diagnostics to check application availability and assess performance metrics.
 
-*   **Trigger:** HTTP Trigger
-*   **Authentication:** System Assigned Managed Identity
-*   **Environment Variables:**
-    *   `WEBSITE_NAME`: Name of the WebApp to restart (e.g., `my-webapp`).
-    *   `RESOURCE_GROUP_NAME`: Resource Group the WebApp belongs to (e.g., `my-resource-group`).
-    *   `SUBSCRIPTION_ID`: Subscription ID containing the WebApp (e.g., `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). *Best practice is to retrieve this from the context object during runtime*
-*   **Code (Example - Python):**
+**3.4 Remote Debugging (Advanced):**
 
-```python
-import logging
-import azure.functions as func
-import azure.mgmt.web
-from azure.identity import DefaultAzureCredential
-import os
+*   If the above steps don't reveal the root cause, consider remote debugging the WebApp. This allows you to step through the code and identify the source of the CPU consumption.  **Note:** This should only be performed in a non-production environment first.
+*   **Tools:** Visual Studio with the Azure SDK installed.
+*   **Prerequisites:** Enable remote debugging on the WebApp through the Azure Portal (under "Configuration" -> "General settings").
+*   **Procedure:** Attach the debugger to the `w3wp.exe` process (or the relevant process for your application framework) and examine thread activity and CPU usage.
 
-def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info('Python HTTP trigger function processed a request.')
+**3.5 Examine Application Logs:**
 
-    try:
-        website_name = os.environ["WEBSITE_NAME"]
-        resource_group_name = os.environ["RESOURCE_GROUP_NAME"]
-        # Use DefaultAzureCredential - automatically uses managed identity if available
-        credential = DefaultAzureCredential()
+*   **Access App Service Logs:**
+    *   **Kudu Console:** Navigate to the Kudu console (`https://[your-webapp-name].scm.azurewebsites.net/`) and access log files under `D:\home\LogFiles`.  Check `application` logs, `http` logs, and any custom log files.
+    *   **Log Stream:**  Use the Log Stream feature in the Azure Portal (under "Monitoring" -> "Log stream") to view real-time log output.
+*   **Analyze Logs:**
+    *   Look for error messages, warnings, or unusual activity that might indicate the cause of the high CPU.
+    *   Correlate log entries with the timestamp of the alert trigger.
 
-        subscription_id = os.environ.get("SUBSCRIPTION_ID") # Consider retrieving programmatically
+**3.6  Common Causes of High CPU Usage:**
 
-        if not subscription_id:
-            logging.error("SUBSCRIPTION_ID environment variable is not set.")
-            return func.HttpResponse(
-                "Subscription ID not found in environment variables.",
-                status_code=500
-            )
+*   **Code Issues:**
+    *   Infinite loops.
+    *   Inefficient algorithms.
+    *   Memory leaks leading to garbage collection thrashing.
+    *   Deadlocks.
+*   **External Dependencies:**
+    *   Slow database queries.
+    *   Unresponsive external services.
+    *   Network latency.
+*   **High Request Load:**
+    *   Sudden surge in user traffic.
+    *   Denial-of-service (DoS) attack.
+    *   Crawlers or bots.
+*   **Configuration Issues:**
+    *   Incorrectly configured caching.
+    *   Excessive logging.
+    *   Inadequate resources (e.g., small App Service Plan).
+*   **Background Processes:**
+    *   Scheduled tasks or background jobs consuming resources.
 
-        web_client = azure.mgmt.web.WebSiteManagementClient(credential, subscription_id)
+## 4. Auto-Remediation (Azure Function Restart)
 
-        logging.info(f"Attempting to restart WebApp '{website_name}' in resource group '{resource_group_name}'.")
-        web_client.web_apps.restart(resource_group_name, website_name)
+**4.1 Azure Function Details:**
 
-        logging.info(f"WebApp '{website_name}' restarted successfully.")
+*   **Function Name:**  [Azure Function Name] (e.g., RestartWebAppFunction)
+*   **Resource Group:** [Resource Group Name containing the Azure Function]
+*   **Function Logic:**
+    *   Receives a WebApp name as input.
+    *   Authenticates with Azure using a Managed Identity (recommended) or a Service Principal.
+    *   Uses the Azure SDK to restart the WebApp.
 
-        return func.HttpResponse(
-             f"WebApp '{website_name}' restarted successfully.",
-             status_code=200
-        )
+**4.2 Function Code Example (PowerShell):**
 
-    except Exception as e:
-        logging.exception(f"Error restarting WebApp: {e}")
-        return func.HttpResponse(
-             f"Error restarting WebApp: {e}",
-             status_code=500
-        )
+```powershell
+# Requires -Modules Az.Websites, Az.Accounts
+
+param($webAppName)
+
+try {
+    # Connect to Azure
+    Connect-AzAccount -Identity  # Use Managed Identity
+
+    # Alternatively, use Service Principal:
+    # Connect-AzAccount -ServicePrincipal -TenantId "<TenantId>" -ApplicationId "<AppId>" -CertificateThumbprint "<Thumbprint>"
+
+    Write-Host "Restarting WebApp: $webAppName"
+
+    Restart-AzWebApp -ResourceGroupName "[Resource Group Name]" -Name $webAppName -Force
+
+    Write-Host "WebApp $webAppName restarted successfully."
+}
+catch {
+    Write-Error "Error restarting WebApp: $($_.Exception)"
+    throw $_.Exception
+}
 ```
 
-**Note:** Replace placeholders (e.g., `my-webapp`, `my-resource-group`) with your actual values.  Also, make sure your requirements.txt file includes `azure-mgmt-web` and `azure-identity`.
+**4.3 Alert Rule Configuration:**
 
-**Alert Configuration:**
+*   **Action Group:** The Azure Monitor Alert rule should be configured to trigger the Azure Function.
+*   **Webhook Payload:**  The alert's webhook payload should include the `webAppName` as a parameter that the function expects.
 
-*   **Alert Rule:**  Configure an Azure Monitor alert rule that triggers the Azure Function when the CPU Percentage metric exceeds 10% for 5 minutes.
-*   **Action Group:**  Configure an Action Group that includes the Azure Function as an action.  Use the HTTP trigger URL of the Function App.
+**Example Webhook Payload (JSON):**
 
-**Important Considerations:**
-
-*   **Impact:** Restarting the WebApp will cause a brief downtime for users.
-*   **Frequency:**  Monitor the frequency of auto-remediations.  If the WebApp is being restarted frequently, it indicates a more serious underlying issue that requires investigation.
-*   **Escalation:** If auto-remediation fails or the issue persists, escalate to the appropriate on-call team.
-
-## 4. Logs
-
-### 4.1. WebApp Logs
-
-*   **Application Logs:**  Check the WebApp's application logs for errors, warnings, and performance information.
-    *   **Azure Portal:** Navigate to the WebApp's "App Service Logs" section.
-    *   **Log Stream:**  Use the Log Stream feature to view real-time logs.
-    *   **File System Logs:**  Download log files from the `/LogFiles` directory.
-*   **Web Server Logs:**  Examine the Web Server logs (e.g., IIS logs) for HTTP errors and performance metrics.
-    *   **Azure Portal:** Navigate to the WebApp's "App Service Logs" section.
-*   **Diagnostic Logs:**  Enable and analyze diagnostic logs for more detailed information about WebApp behavior.
-
-### 4.2. Azure Function Logs
-
-*   **Azure Portal:** Navigate to the Function App and select "Monitor".
-*   **Invocation Logs:** View the logs for each function invocation to track the success or failure of the restart operation.
-*   **Application Insights:** If Application Insights is integrated with the Function App, use it to analyze performance and identify any errors.
-
-### 4.3. Azure Activity Log
-
-*   **Azure Portal:** Navigate to the Azure Activity Log.
-*   **Filter:** Filter by "Resource" to find events related to the WebApp and the Function App.
-*   **Events:** Review the Activity Log for events such as WebApp restarts, function invocations, and permission changes.
-
-## 5. Post-Mortem Analysis
-
-After the incident is resolved, conduct a post-mortem analysis to identify the root cause of the high CPU utilization and prevent future occurrences.  Consider the following:
-
-*   **Root Cause Analysis:**  Determine the underlying reason for the high CPU usage (e.g., code defect, traffic spike, dependency issue).
-*   **Corrective Actions:**  Implement corrective actions to address the root cause (e.g., fix code bugs, optimize database queries, scale the WebApp).
-*   **Preventive Measures:**  Implement preventive measures to avoid similar incidents in the future (e.g., improve monitoring, implement performance testing, implement rate limiting).
-*   **Documentation Updates:**  Update this runbook with any lessons learned or new troubleshooting steps.
-
-## 6. Escalation
-
-If the auto-remediation fails to resolve the issue, or if the high CPU utilization persists after the restart, escalate to the following on-call team:
-
-*   **Team:** [Specify On-Call Team Here]
-*   **Contact:** [Specify Contact Information Here]
-
-This runbook provides a comprehensive guide for addressing high CPU utilization alerts in an Azure WebApp. By following these steps, you can quickly diagnose and resolve performance issues, minimize downtime, and prevent future occurrences. Remember to customize this runbook to fit your specific environment and application requirements.
+```json
+{
+  "schemaId": "AzureMonitorMetricAlert",
+  "data": {
+    "context": {
+      "timestamp": "2023-10-26T12:00:00Z",
+      "id": "/subscriptions/[subscriptionId]/resourceGroups/[resourceGroupName]/providers/Microsoft.Web/sites/[webAppName]",
+      "name": "[webAppName]",
+      "description": "High CPU Usage Alert",
+      "conditionType": "SingleResourceMultipleMetricCriteria",
+      "condition": {
+        "metricName": "CpuPercentage",
+        "metricUnit": "Percent",
+        "timeAggregation": "Average",
+        "operator": "GreaterThan",
+        "threshold": "10",
+        "windowSize": "00:05:00",
+        "failedLocationCount": 1
+      },
+      "subscriptionId": "[subscriptionId]",
+      "resourceGroupName": "[resourceGroupName]",
+      "resourceName": "[webAppName]",
+      "resourceType": "Microsoft.Web/sites",
+      "resourceId": "/subscriptions/[subscriptionId]/resourceGroups/[resourceGroupName]/providers/Microsoft.Web/sites/[webAppName]",
+      "resourceRegion": "[region]",
+      "portalLink": "https://portal.azure.com/#resource/subscriptions/[subscriptionId]/resourceGroups/[resourceGroupName]/providers/Microsoft.Web/sites/[webAppName]/overview",
+       "properties": {
+           "webAppName": "[webAppName]"  // Pass the WebApp name to the Function
+       }
+    },
+    "configuration": {
+      "metricName": "CpuPercentage",
+      "threshold": "10",
+      "windowSize": "PT5M"
+    }
+  }
+}
 ```
+
+**4.4 Monitoring the Auto-Remediation:**
+
+*   **Azure Function Logs:** Monitor the Azure Function's execution logs to ensure the restart was successful.  Check for errors in the function execution.
+*   **WebApp Metrics:** After the function executes, monitor the WebApp's CPU usage to confirm that it has returned to a normal level.
+*   **Azure Monitor Activity Log:** Review the Azure Monitor Activity Log for the WebApp to verify the restart operation.
+
+## 5. Escalation
+
+If the auto-remediation fails to resolve the issue, or if the high CPU usage persists shortly after the restart, escalate to the on-call engineer.
+
+**Escalation Path:**
+
+1.  **On-Call Engineer:** [Name/Alias of On-Call Engineer]
+2.  **Engineering Team Lead:** [Name/Alias of Engineering Team Lead]
+
+## 6. Post-Incident Analysis
+
+*   **Root Cause Analysis:** After the incident is resolved, conduct a thorough root cause analysis to determine the underlying cause of the high CPU usage.
+*   **Permanent Fix:** Implement a permanent fix to prevent the issue from recurring. This might involve code changes, configuration adjustments, or resource upgrades.
+*   **Runbook Updates:** Update this runbook with any lessons learned and improvements to the auto-remediation process.
+*   **Monitoring Improvements:** Enhance the monitoring configuration to provide earlier detection of potential issues.
+
+## 7. Logs
+
+*   **Azure WebApp Logs:** Access logs through the Kudu console or the Log Stream feature.
+*   **Azure Function Logs:** View logs in the Azure Portal for the Azure Function.
+*   **Azure Monitor Activity Log:** Review the Activity Log for events related to the WebApp and Function.
+*   **Application Insights Logs:** Utilize Application Insights queries to analyze telemetry data related to the WebApp's performance and exceptions.  Examples:
+
+    *   `requests | where timestamp > ago(1h) | summarize avg(duration), count() by bin(timestamp, 5m)` (Average request duration over time)
+    *   `exceptions | where timestamp > ago(1h) | summarize count() by type` (Exception counts by type)
+
+## 8. Related Documentation
+
+*   **Azure Monitor Documentation:** [Link to Azure Monitor Documentation]
+*   **Azure WebApp Documentation:** [Link to Azure WebApp Documentation]
+*   **Azure Functions Documentation:** [Link to Azure Functions Documentation]
+*   **Application Insights Documentation:** [Link to Application Insights Documentation]
+
+This comprehensive runbook provides a structured approach to handling high CPU usage on an Azure WebApp, combining automated recovery with detailed troubleshooting steps and logging guidance. Remember to replace the bracketed placeholders with the actual values for your environment.  This will allow for faster and more accurate responses to incidents.
 
 ## Architecture Diagram
 
