@@ -59,6 +59,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
+          # Make a curl request to Gemini API to generate the Mermaid diagram code.
+          # The prompt is highly specific to ensure Gemini outputs valid Mermaid syntax.
           DIAGRAM_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
@@ -70,15 +72,6 @@ jobs:
                 }
               ]
             }')
-
-          echo "$DIAGRAM_RESPONSE" > diagram_response.json
-
-          echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | \
-          sed -n '/```mermaid/,/```/{//!p}' > diagram.mmd
-
-          echo "--- Content of diagram.mmd ---"
-          cat diagram.mmd
-          echo "----------------------------"
 
           # Save the raw API response (optional, for debugging)
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
@@ -93,6 +86,17 @@ jobs:
           echo "--- Content of diagram.mmd ---"
           cat diagram.mmd
           echo "----------------------------"
+
+      - name: Lint Mermaid diagram
+        # This new step validates the Mermaid syntax using 'mermaid-lint'.
+        # It will provide much clearer error messages if the diagram.mmd is invalid.
+        # 'continue-on-error: true' is set so the workflow proceeds even if linting fails,
+        # allowing you to see the error message in the logs during debugging.
+        # For a production workflow, you might remove this line so the workflow fails on bad diagrams.
+        run: |
+          echo "Running mermaid-lint on diagram.mmd..."
+          mermaid-lint diagram.mmd
+        continue-on-error: true # Keep this true for now, so you can see the linting output even if it errors.
 
       # --- CRITICAL FIX: Order of steps is important! ---
       # This step MUST run BEFORE the 'Generate PNG from Mermaid' step.
