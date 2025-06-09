@@ -26,7 +26,7 @@ jobs:
           npm install -g @mermaid-js/mermaid-cli
           # Install Puppeteer's browser dependencies - this is crucial
           sudo apt-get update
-          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2
+          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64
 
       - name: Generate runbook from Gemini
         env:
