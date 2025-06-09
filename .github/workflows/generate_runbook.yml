@@ -74,7 +74,7 @@ jobs:
         env:
           PUPPETEER_EXECUTABLE_PATH: /opt/chrome/chrome
         run: |
-          mmdc -i diagram.mmd -o diagram.png
+          mmdc -i diagram.mmd -o diagram.png --no-sandbox
 
       - name: Embed image in README
         run: |
