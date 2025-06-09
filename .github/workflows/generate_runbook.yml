@@ -12,6 +12,7 @@ permissions:
 jobs:
   generate-runbook:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v2
@@ -38,14 +39,13 @@ jobs:
 
           if [ -z "$RUNBOOK_TEXT" ] || [ "$RUNBOOK_TEXT" == "null" ]; then
             echo "Error: Failed to extract runbook content from Gemini API response."
-            echo "Full API response:"
             cat response.json
             exit 1
           fi
 
           echo "$RUNBOOK_TEXT" > README.md
 
-      - name: Append Mermaid diagram using Gemini
+      - name: Generate Mermaid diagram using Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -66,28 +66,39 @@ jobs:
 
           if [ -z "$DIAGRAM_TEXT" ] || [ "$DIAGRAM_TEXT" == "null" ]; then
             echo "Error: Failed to extract diagram content from Gemini API response."
-            echo "Full API response:"
             cat diagram_response.json
             exit 1
           fi
 
+          echo "$DIAGRAM_TEXT" > diagram.mmd
+
+      - name: Install Mermaid CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y npm
+          sudo npm install -g @mermaid-js/mermaid-cli
+
+      - name: Convert Mermaid diagram to PNG
+        run: |
+          mmdc -i diagram.mmd -o diagram.png
+
+      - name: Embed diagram image in README
+        run: |
           {
             echo ""
-            echo "## Architecture Diagram (Mermaid)"
-            echo '```mermaid'
-            echo "$DIAGRAM_TEXT"
-            echo '```'
+            echo "## Architecture Diagram (Image)"
+            echo "![Architecture Diagram](diagram.png)"
           } >> README.md
 
       - name: Commit and push runbook
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add README.md
+          git add README.md diagram.png
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto-generated runbook with diagram"
+            git commit -m "Auto-generated runbook with architecture diagram"
             git push
           fi
         env:
