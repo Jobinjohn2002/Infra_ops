@@ -72,9 +72,9 @@ jobs:
 
       - name: Generate PNG from Mermaid
         env:
-          PUPPETEER_EXECUTABLE_PATH: /opt/chrome/chrome
+          MMD_CHROME_ARGS: "--no-sandbox"
         run: |
-          mmdc -i diagram.mmd -o diagram.png --no-sandbox
+          mmdc -i diagram.mmd -o diagram.png
 
       - name: Embed image in README
         run: |
