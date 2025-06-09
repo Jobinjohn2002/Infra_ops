@@ -67,16 +67,15 @@ jobs:
           echo "$DIAGRAM_RESPONSE" > diagram_response.json
           echo "$DIAGRAM_RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > diagram.mmd
 
-      - name: Generate PNG from Mermaid
-        run: |
-          mmdc -i diagram.mmd -o diagram.png -p /usr/bin/google-chrome-stable --puppeteerConfigFile ./puppeteer-config.json
-          # Note: The Puppeteer config file approach is sometimes more reliable than env vars.
-          # We'll create a simple config file in the next step.
-
-      - name: Create Puppeteer config for `mmdc`
-        # This step should be placed *before* "Generate PNG from Mermaid"
+      - name: Create Puppeteer config for mmdc
+        # This step must run BEFORE "Generate PNG from Mermaid"
         run: |
           echo '{ "executablePath": "/usr/bin/google-chrome-stable", "args": ["--no-sandbox", "--disable-setuid-sandbox"] }' > puppeteer-config.json
+
+      - name: Generate PNG from Mermaid
+        run: |
+          # The puppeteer-config.json file now exists when mmdc runs
+          mmdc -i diagram.mmd -o diagram.png -p /usr/bin/google-chrome-stable --puppeteerConfigFile ./puppeteer-config.json
 
       - name: Embed image in README
         run: |
