@@ -1,6 +1,7 @@
 graph LR
-    A[Azure WebApp] --> B{Azure Monitor Alert - CPU > 10%}
-    B --> C[Action Group]
-    C --> D[Azure Function App - Restart WebApp]
-    D --> A
-    B -- Optional --> E[Logic App - Escalation/Notifications]
+    A[Azure WebApp] --> B{Azure Monitor Alert};
+    B -- CPU > 10% --> C[Action Group];
+    C --> D[Azure Function App];
+    D -- Restart WebApp --> A;
+    C --> E{Optional: Logic App};
+    E -- Additional Actions --> F[Other Azure Resources];
