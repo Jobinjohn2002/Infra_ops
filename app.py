@@ -19,12 +19,38 @@ def index():
     cur.close()
 
     html = """
-    <h2>User List</h2>
-    <ul>
-    {% for user in users %}
-        <li>ID: {{ user[0] }}, Name: {{ user[1] }}</li>
-    {% endfor %}
-    </ul>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <title>User List</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-light">
+        <div class="container py-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">User List</h2>
+                </div>
+                <div class="card-body">
+                    {% if users %}
+                        <ul class="list-group">
+                            {% for user in users %}
+                                <li class="list-group-item">
+                                    <strong>ID:</strong> {{ user[0] }} |
+                                    <strong>Name:</strong> {{ user[1] }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">No users found in the database.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
     """
     return render_template_string(html, users=data)
 
