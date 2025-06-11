@@ -22,7 +22,7 @@ jobs:
 
     - name: Copy Flask app to Azure VM
       run: |
-        rsync -av --exclude='.git' ./ azureuser@74.235.7.102:/home/azureuser/flaskapp
+        rsync -av --exclude='.git' ./ azureuser@20.22.204.31:/home/azureuser/flaskapp
 
     - name: Start Flask app on Azure VM
       run: |
