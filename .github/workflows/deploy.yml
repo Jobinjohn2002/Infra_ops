@@ -18,7 +18,7 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H 74.235.7.102 >> ~/.ssh/known_hosts
+        ssh-keyscan -H 20.22.204.31 >> ~/.ssh/known_hosts
 
     - name: Copy Flask app to Azure VM
       run: |
@@ -26,7 +26,7 @@ jobs:
 
     - name: Start Flask app on Azure VM
       run: |
-        ssh azureuser@74.235.7.102 << 'EOF'
+        ssh azureuser@20.22.204.31 << 'EOF'
           sudo apt update
           sudo apt install -y python3-pip
           pip3 install flask
