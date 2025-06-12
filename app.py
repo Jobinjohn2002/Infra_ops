@@ -31,7 +31,7 @@ def index():
         <div class="container py-5">
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
-                    <h2 class="mb-0">Users List in Table view</h2>
+                    <h2 class="mb-0">Users List in Grid view</h2>
                 </div>
                 <div class="card-body">
                     {% if users %}
