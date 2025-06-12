@@ -1,9 +1,6 @@
 name: Generate Runbook with Diagram
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch: # Allows you to trigger this workflow manually from GitHub UI
 
 permissions:
