@@ -3,5 +3,7 @@ graph LR
     B -- CPU > 10% --> C[Action Group];
     C --> D[Azure Function App];
     D -- Restart WebApp --> A;
-    C --> E{Optional: Logic App};
-    E -- Additional Actions --> F[Other Azure Resources];
+    C -- Optional --> E[Logic App];
+    E -- Perform tasks --> F{Decision Point};
+    F -- Condition Met --> D;
+    F -- Condition Not Met --> G[End];
