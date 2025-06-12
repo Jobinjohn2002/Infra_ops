@@ -32,6 +32,7 @@ def index():
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
                     <h2 class="mb-0">Users List in Table view</h2>
+                    <p>welcome to the users table</p>
                 </div>
                 <div class="card-body">
                     {% if users %}
