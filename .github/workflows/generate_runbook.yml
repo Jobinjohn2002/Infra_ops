@@ -40,7 +40,7 @@ jobs:
               "contents": [
                 {
                   "parts": [
-                    {"text": "Generate a detailed Markdown runbook for an Azure WebApp CPU alert and auto-recovery workflow. The alert triggers when CPU usage goes above 10%. The auto-recovery is handled by an Azure Function that restarts the WebApp. Include symptoms, troubleshooting, auto-remediation, and logs sections."}
+                    {"text": "Generate a detailed Markdown runbook for an Azure WebApp CPU alert and auto-recovery workflow. The alert triggers when CPU usage goes above 70%. The auto-recovery is handled by an Azure Function that restarts the WebApp. Include symptoms, troubleshooting, auto-remediation, and logs sections. i dont want the response to be in markdown format"}
                   ]
                 }
               ]
