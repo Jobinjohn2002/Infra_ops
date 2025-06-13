@@ -2,6 +2,7 @@ import os
 import requests
 from azure.identity import DefaultAzureCredential
 from datetime import datetime
+from collections import defaultdict
 
 cred = DefaultAzureCredential()
 token = cred.get_token("https://management.azure.com/.default").token
@@ -35,14 +36,18 @@ body = {
 response = requests.post(url, json=body, headers=headers)
 data = response.json()
 
-print("=== Azure Daily Cost Report ===")
+# Accumulate total cost per day
+daily_totals = defaultdict(float)
+currency = None
+
 for row in data["properties"]["rows"]:
     cost = row[0]
     raw_date = str(row[1])
     service_name = row[2]
-    currency = row[3]
+    currency = row[3]  # Assuming currency is same for all rows
+    daily_totals[raw_date] += cost
 
-    # Format the date from YYYYMMDD to DD-MM-YYYY
+print("=== Azure Total Daily Cost Report ===")
+for raw_date, total_cost in sorted(daily_totals.items()):
     formatted_date = datetime.strptime(raw_date, "%Y%m%d").strftime("%d-%m-%Y")
-
-    print(f"{formatted_date} - {service_name}: {currency} {cost:.2f}")
+    print(f"{formatted_date}: {currency} {total_cost:.2f}")
